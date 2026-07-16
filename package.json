@@ -4,10 +4,12 @@
   "type": "module",
   "main": "index.js",
   "dependencies": {
-    "express": "^4.19.2",
-    "cors": "^2.8.5",
     "@google/genai": "^2.11.0",
-    "nodemailer": "^6.9.13"
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "mongodb": "^7.5.0",
+    "nodemailer": "^6.9.13",
+    "stripe": "^22.3.2"
   },
   "scripts": {
     "start": "node index.js"
