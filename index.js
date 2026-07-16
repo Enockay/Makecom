@@ -31,6 +31,13 @@ function saveUsers(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'LeadGen AI Pro backend is running.'
+  });
+});
+
 app.post('/generate', async (req, res) => {
   const { linkedinUrl, userEmail, emailTone } = req.body;
   if (!linkedinUrl || !userEmail) {
@@ -108,7 +115,7 @@ app.post('/stripe-webhook', async (req, res) => {
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    const customerEmail = session.customer_detailsemail;
+    const customerEmail = session.customer_details.email;
     if (customerEmail) {
       const db = loadUsers();
       if (!db[customerEmail]) db[customerEmail] = { creditsUsed: 3 };
