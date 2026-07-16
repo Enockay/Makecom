@@ -8,7 +8,14 @@ import { GoogleGenAI } from '@google/genai';
 import nodemailer from 'nodemailer';
 import Stripe from 'stripe';
 import { MongoClient } from 'mongodb';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import path from 'path';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+app.use(express.static(path.join(__dirname, 'public')));
 const app = express();
 app.use(cors());
 
@@ -93,7 +100,8 @@ app.post('/generate', async (req, res) => {
       return res.status(402).json({
         success: false,
         paywall: true,
-        message: 'Credits exhausted. Please subscribe.'
+        stripeLink: `${process.env.STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(userEmail)}`,
+        message: 'Credits exhausted. Redirecting to payment.'
       });
     }
 
