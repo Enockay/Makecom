@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Cold Email Generator</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #f4f6f8;
+    margin: 0;
+    padding: 40px 20px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .card {
+    background: #ffffff;
+    max-width: 480px;
+    width: 100%;
+    padding: 32px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+
+  h1 {
+    font-size: 22px;
+    margin-bottom: 8px;
+    color: #1a1a1a;
+  }
+
+  p.subtitle {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  #leadForm {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  input, select {
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  button {
+    padding: 13px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  button:hover:not(:disabled) {
+    background-color: #2980b9;
+  }
+
+  button:disabled {
+    background-color: #a0c4dd;
+    cursor: not-allowed;
+  }
+
+  #responseMessage {
+    margin-top: 18px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  #responseMessage a {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #2ecc71;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: bold;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>AI Cold Email Generator</h1>
+  <p class="subtitle">Inserisci un profilo LinkedIn e ricevi via email una email di vendita generata dall'AI.</p>
+
+  <form id="leadForm">
+    <input type="email" id="userEmail" placeholder="La tua Email" required />
+    <input type="url" id="linkedinUrl" placeholder="URL Profilo LinkedIn" required />
+    <select id="emailTone">
+      <option value="Professional">Professionale</option>
+      <option value="Friendly">Amichevole</option>
+      <option value="Direct">Diretto / Persuasivo</option>
+    </select>
+    <button type="submit" id="submitBtn">Genera Email Gratis</button>
+  </form>
+
+  <div id="responseMessage"></div>
+</div>
+
+<script>
+document.getElementById('leadForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const email = document.getElementById('userEmail').value;
+  const linkedin = document.getElementById('linkedinUrl').value;
+  const tone = document.getElementById('emailTone').value;
+  const btn = document.getElementById('submitBtn');
+  const msg = document.getElementById('responseMessage');
+
+  btn.disabled = true;
+  btn.innerText = 'Generazione in corso...';
+  msg.innerHTML = '';
+
+  try {
+    // Relative path works since this page is served from the same
+    // Express app as the /generate route, no full URL needed.
+    const res = await fetch('/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userEmail: email, linkedinUrl: linkedin, emailTone: tone })
+    });
+    const data = await res.json();
+
+    if (res.status === 200) {
+      msg.style.color = '#2ecc71';
+      msg.innerHTML = `Successo! Controlla la tua casella email. Crediti rimanenti: ${data.remainingCredits}`;
+    } else if (res.status === 402) {
+      msg.style.color = '#e74c3c';
+      msg.innerHTML = `<p>Hai esaurito le 3 generazioni gratuite. Reindirizzamento al pagamento...</p>`;
+
+      // Backend returns the Stripe payment link directly, so we redirect
+      // the user automatically rather than showing a manual click-through link.
+      if (data.stripeLink) {
+        setTimeout(() => {
+          window.location.href = data.stripeLink;
+        }, 1500);
+      }
+    } else {
+      msg.style.color = '#e74c3c';
+      msg.innerHTML = data.message || 'Si è verificato un errore.';
+    }
+  } catch (err) {
+    msg.style.color = '#e74c3c';
+    msg.innerHTML = 'Errore di connessione al server.';
+  } finally {
+    btn.disabled = false;
+    btn.innerText = 'Genera Email Gratis';
+  }
+});
+</script>
+
+</body>
+</html>

@@ -2,6 +2,7 @@
 // to call this API from a different domain, Google's Gemini SDK for AI generation,
 // Nodemailer to send the generated email to the user, Stripe for payment webhooks,
 // and the official MongoDB driver for persistent storage.
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
@@ -11,6 +12,7 @@ import { MongoClient } from 'mongodb';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import path from 'path';
+import { startClientFinder, getPendingLeads, dismissLead } from './client-finder.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,15 +43,18 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // includes the target database name ("makecom") baked into the URI itself.
 const client = new MongoClient(process.env.MONGO_SESSION_URI);
 let usersCollection; // Will be assigned once the connection is established.
+let leadsCollection; // Will be assigned once the connection is established.
 
-// Connects to MongoDB Atlas and grabs a reference to the "users" collection.
+// Connects to MongoDB Atlas and grabs a reference to the "users" and "leads" collections.
 // client.db() with no argument tells the driver to use whatever database
 // name is already specified inside MONGO_SESSION_URI.
 async function connectDB() {
   await client.connect();
   const db = client.db();
   usersCollection = db.collection('users');
+  leadsCollection = db.collection('leads');
   console.log('MongoDB connected.');
+  return { usersCollection, leadsCollection };
 }
 
 // Looks up a single user document by email. Returns null if not found.
@@ -108,7 +113,7 @@ app.post('/generate', async (req, res) => {
 
     // Call Gemini to analyze the LinkedIn profile and draft a cold email in Italian.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-flash-latest',
       contents: `Analyze LinkedIn profile: ${linkedinUrl}. Write a highly persuasive cold sales email in Italian. Tone: ${emailTone || 'Professional'}. Keep it short.`,
     });
     const emailText = response.text;
@@ -201,14 +206,45 @@ app.post('/stripe-webhook', async (req, res) => {
   res.json({ received: true });
 });
 
+// ---- Client Finding Engine routes ----
+// These expose the leads that client-finder.js discovers on Reddit, so you (a human)
+// can review each one and decide whether/how to reply. Nothing here posts automatically.
+
+// Returns pending leads (newest first) with the AI-drafted reply suggestion attached.
+app.get('/leads', async (req, res) => {
+  try {
+    const leads = await getPendingLeads(leadsCollection);
+    res.status(200).json({ success: true, leads });
+  } catch (error) {
+    console.log('Leads fetch error:', error.message);
+    res.status(500).json({ success: false, message: 'Could not load leads.' });
+  }
+});
+
+// Marks a lead as handled/dismissed once you've replied to it yourself (or decided to skip it).
+app.post('/leads/:id/dismiss', async (req, res) => {
+  try {
+    await dismissLead(leadsCollection, req.params.id);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.log('Lead dismiss error:', error.message);
+    res.status(500).json({ success: false, message: 'Could not dismiss lead.' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB FIRST, and only start accepting HTTP requests once that
 // succeeds. If the database connection fails, the process exits immediately
 // with a clear error instead of running silently with a broken data layer.
 connectDB()
-  .then(() => {
+  .then(({ leadsCollection }) => {
     app.listen(PORT, () => console.log('Server online.'));
+
+    // Start the client finding engine in the background: it periodically searches
+    // Reddit for relevant posts and queues them as leads for manual review/reply.
+    // It never posts anything on its own.
+    startClientFinder({ ai, leadsCollection });
   })
   .catch((err) => {
     console.error('Failed to connect to MongoDB:', err);
