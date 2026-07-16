@@ -15,8 +15,9 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-app.use(express.static(path.join(__dirname, 'public')));
+
 const app = express();
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 
 // Stripe requires the RAW, unparsed request body to verify its signature,
